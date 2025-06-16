@@ -40,18 +40,17 @@ app.post('/api/query', async (req, res) => {
       score: cosineSimilarity(doc.vector, queryVector),
     }));
 
-    const topRelevant = scored
-      .filter((doc) => doc.score > 0.5)
-      .sort((a, b) => b.score - a.score)
-      .slice(0, 4);
+    let topRelevant = scored
+  .filter((doc) => doc.score > 0.5)
+  .sort((a, b) => b.score - a.score)
+  .slice(0, 4);
 
-    if (topRelevant.length === 0) {
-      res.write(
-        `I'm sorry, I couldn’t find any relevant information about that in our site content.\n\n` +
-        `Please feel free to [contact us here](https://www.digitallaborfactory.ai/contact) and we’d be happy to help.`
-      );
-      return res.end();
-    }
+// If nothing passed threshold, just use top 2 no matter what
+if (topRelevant.length === 0) {
+  topRelevant = scored
+    .sort((a, b) => b.score - a.score)
+    .slice(0, 2);
+}
 
     const topChunks = topRelevant.map((doc) => doc.content).join('\n\n');
 
