@@ -41,7 +41,7 @@ app.post('/api/query', async (req, res) => {
     }));
 
     const topRelevant = scored
-      .filter((doc) => doc.score > 0.75)
+      .filter((doc) => doc.score > 0.5)
       .sort((a, b) => b.score - a.score)
       .slice(0, 4);
 
