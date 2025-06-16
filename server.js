@@ -40,15 +40,32 @@ app.post('/api/query', async (req, res) => {
       score: cosineSimilarity(doc.vector, queryVector),
     }));
 
-    const topChunks = scored
+    const topRelevant = scored
+      .filter((doc) => doc.score > 0.75)
       .sort((a, b) => b.score - a.score)
-      .slice(0, 4)
-      .map((doc) => doc.content)
-      .join('\n\n');
+      .slice(0, 4);
+
+    if (topRelevant.length === 0) {
+      res.write(
+        `I'm sorry, I couldn’t find any relevant information about that in our site content.\n\n` +
+        `Please feel free to [contact us here](https://www.digitallaborfactory.ai/contact) and we’d be happy to help.`
+      );
+      return res.end();
+    }
+
+    const topChunks = topRelevant.map((doc) => doc.content).join('\n\n');
 
     const messages = [
-      { role: 'system', content: 'You are a helpful AI agent representing our company. You always answer in the first person plural and speak as if you are part of the Digital Labor Factory team. You must answer using only the provided context.' },
-      { role: 'user', content: `Context:\n${topChunks}\n\nQuestion: ${query}` },
+      {
+        role: 'system',
+        content:
+          'You are a helpful AI agent representing our company. You always answer in the first person plural and speak as if you are part of the Digital Labor Factory team. ' +
+          'You must answer using only the provided context. If the context does not contain the answer, say so clearly and suggest contacting us.',
+      },
+      {
+        role: 'user',
+        content: `Context:\n${topChunks}\n\nQuestion: ${query}`,
+      },
     ];
 
     const stream = await openai.chat.completions.create({
@@ -70,7 +87,9 @@ app.post('/api/query', async (req, res) => {
   }
 });
 
-// ✅ Only call app.listen once
 app.listen(port, () => {
+  console.log(`NLWeb server running on port ${port}`);
+});
+
   console.log(`NLWeb server running on port ${port}`);
 });
