@@ -90,6 +90,3 @@ app.post('/api/query', async (req, res) => {
 app.listen(port, () => {
   console.log(`NLWeb server running on port ${port}`);
 });
-
-  console.log(`NLWeb server running on port ${port}`);
-});
