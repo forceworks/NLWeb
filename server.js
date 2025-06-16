@@ -70,10 +70,7 @@ app.post('/api/query', async (req, res) => {
   }
 });
 
-app.listen(port, () => {
-  console.log(`Server running on port ${port}`);
-});
-
+// ✅ Only call app.listen once
 app.listen(port, () => {
   console.log(`NLWeb server running on port ${port}`);
 });
