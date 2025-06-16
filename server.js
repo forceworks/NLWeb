@@ -47,7 +47,7 @@ app.post('/api/query', async (req, res) => {
       .join('\n\n');
 
     const messages = [
-      { role: 'system', content: 'You are an assistant that answers strictly based on the context provided.' },
+      { role: 'system', content: 'You are a helpful AI agent representing our company. You always answer in the first person plural and speak as if you are part of the Digital Labor Factory team. You must answer using only the provided context.' },
       { role: 'user', content: `Context:\n${topChunks}\n\nQuestion: ${query}` },
     ];
 
