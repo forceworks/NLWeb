@@ -33,7 +33,7 @@ app.use(express.json());
       const topChunks = filtered.map(doc => doc.content).join('\n\n');
 
       const nameLine = userName
-        ? `If you know the user's name, occasionally refer to them by it to keep the tone personal. The user's name is "${userName}". `
+        ? `If you know the user\'s name, occasionally refer to them by it to keep the tone personal. The user\'s name is "${userName}". `
         : '';
 
       const systemPrompt =
@@ -44,7 +44,7 @@ app.use(express.json());
         'Always respond in the same language the user uses. Use Markdown for light formatting when appropriate. ' +
         'If the context provides only a partial answer, explain what is known and clearly note what is missing. ' +
         'If the answer is not found in the context, say so clearly and suggest they contact us at [digitallaborfactory.ai/contact](https://www.digitallaborfactory.ai/contact). ' +
-        'Never invent information. It's better to ask the user a question or say "I\'m not sure" than to guess.';
+        'Never invent information. It\'s better to ask the user a question or say "I\'m not sure" than to guess.';
 
       const claudeStream = await fetch('https://api.anthropic.com/v1/messages', {
         method: 'POST',
