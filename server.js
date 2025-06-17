@@ -1,17 +1,15 @@
-import express from 'express';
+""import express from 'express';
 import cors from 'cors';
 import fs from 'fs/promises';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import { appendFile } from 'fs/promises';
-import { OpenAI } from 'openai';
+import fetch from 'node-fetch';
 
 const app = express();
 const port = process.env.PORT || 3000;
 app.use(cors());
 app.use(express.json());
-
-const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -28,7 +26,7 @@ function cosineSimilarity(a, b) {
   return dot / (normA * normB);
 }
 
-// POST /api/query — multi-turn RAG + GPT-4
+// POST /api/query — multi-turn RAG + Claude 3 Sonnet
 app.post('/api/query', async (req, res) => {
   const { messages, industry, userName } = req.body;
   const userInput = messages?.slice(-1)[0]?.content;
@@ -41,12 +39,21 @@ app.post('/api/query', async (req, res) => {
   res.setHeader('Transfer-Encoding', 'chunked');
 
   try {
-    const embeddedQuery = await openai.embeddings.create({
-      model: 'text-embedding-3-small',
-      input: userInput,
+    // Replace OpenAI embedding with placeholder or external service if desired
+    const embeddedQuery = await fetch('https://api.openai.com/v1/embeddings', {
+      method: 'POST',
+      headers: {
+        'Authorization': 'Bearer your-embedding-key-here', // remove or replace with real embedding logic
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({
+        model: 'text-embedding-3-small',
+        input: userInput
+      })
     });
 
-    const queryVector = embeddedQuery.data[0].embedding;
+    const embeddingResult = await embeddedQuery.json();
+    const queryVector = embeddingResult.data[0].embedding;
 
     const scored = embeddedDocs
       .filter(doc => !industry || doc.tags?.map(t => t.toLowerCase()).includes(industry.toLowerCase()))
@@ -80,21 +87,35 @@ app.post('/api/query', async (req, res) => {
       'If the answer is not found in the context, say so clearly and suggest they contact us at [digitallaborfactory.ai/contact](https://www.digitallaborfactory.ai/contact). ' +
       'Never invent information. It’s better to ask the user a question or say “I’m not sure” than to guess.';
 
-    const augmentedMessages = [
-      { role: 'system', content: systemPrompt },
-      { role: 'user', content: `Context:\n${topChunks}` },
-      ...messages
-    ];
-
-    const stream = await openai.chat.completions.create({
-      model: 'gpt-3.5-turbo-1106',
-      messages: augmentedMessages,
-      stream: true,
+    const claudeStream = await fetch('https://api.anthropic.com/v1/messages', {
+      method: 'POST',
+      headers: {
+        'x-api-key': process.env.ANTHROPIC_API_KEY,
+        'anthropic-version': '2023-06-01',
+        'content-type': 'application/json',
+      },
+      body: JSON.stringify({
+        model: 'claude-3-sonnet-20240229',
+        max_tokens: 1000,
+        temperature: 0.7,
+        stream: true,
+        messages: [
+          { role: 'user', content: `Context:\n${topChunks}\n\n${userInput}` }
+        ],
+        system: systemPrompt
+      })
     });
 
-    for await (const chunk of stream) {
-      const content = chunk.choices?.[0]?.delta?.content;
-      if (content) res.write(content);
+    if (!claudeStream.body) throw new Error('No response stream');
+
+    const reader = claudeStream.body.getReader();
+    const decoder = new TextDecoder();
+
+    while (true) {
+      const { value, done } = await reader.read();
+      if (done) break;
+      const chunk = decoder.decode(value);
+      res.write(chunk);
     }
 
     res.end();
