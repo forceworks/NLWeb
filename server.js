@@ -30,7 +30,7 @@ function cosineSimilarity(a, b) {
 
 // POST /api/query — multi-turn RAG + GPT-4
 app.post('/api/query', async (req, res) => {
-  const { messages, industry } = req.body;
+  const { messages, industry, userName } = req.body;
   const userInput = messages?.slice(-1)[0]?.content;
 
   if (!messages || !Array.isArray(messages) || !userInput) {
@@ -65,12 +65,12 @@ app.post('/api/query', async (req, res) => {
     }
 
     const topChunks = topRelevant.map(doc => doc.content).join('\n\n');
-    
+
     const nameLine = userName
-      ? `If you know the user's name, occasionally refer to them by it to keep the tone personal. The user's name is "${userName}".`
+      ? `If you know the user\'s name, occasionally refer to them by it to keep the tone personal. The user's name is "${userName}". `
       : '';
+
     const systemPrompt =
-      
       'You are a helpful AI agent representing our company, Digital Labor Factory. You speak on our behalf using the first person plural (“we,” “our”) as part of the team. ' +
       nameLine +
       'Your role is to assist website visitors in exploring our services and understanding what we do. Always answer using only the provided context. ' +
@@ -78,12 +78,12 @@ app.post('/api/query', async (req, res) => {
       'Always respond in the same language the user uses. ' +
       'Format responses using Markdown when helpful (e.g., bullet points, bold service names, links). ' +
       'If the context provides only a partial answer, explain what is known and clearly note what is missing. ' +
-      'If the user's question references a broad topic (e.g., \"banking\" or \"AI\"), ask a clarifying question before giving an answer. For example, ask: “Are you interested in retail, commercial, or digital banking? ' +
+      'If the user\'s question references a broad topic (e.g., "banking" or "AI"), ask a clarifying question before giving an answer. For example, ask: “Are you interested in retail, commercial, or digital banking?” ' +
       'If the answer is not found in the context, say so clearly and suggest they contact us at [digitallaborfactory.ai/contact](https://www.digitallaborfactory.ai/contact). If the answer is present, do not mention the contact link. ' +
       'Never make up information. Maintain a confident, modern, human tone. Avoid corporate jargon or robotic phrasing.';
 
     const augmentedMessages = [
-      { role: 'system', content: 'This is an initial question. Always ask a clarifying question before answering.' },
+      { role: 'system', content: systemPrompt },
       { role: 'user', content: `Context:\n${topChunks}` },
       ...messages
     ];
