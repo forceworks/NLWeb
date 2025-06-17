@@ -40,13 +40,41 @@ app.use(express.json());
         );
       }
 
-      // Extract meaningful words from user query (remove common words)
+      // Extract meaningful words from user query and expand with related terms
       const stopWords = ['tell', 'me', 'about', 'what', 'is', 'are', 'the', 'a', 'an', 'and', 'or', 'but', 'in', 'on', 'at', 'to', 'for', 'of', 'with', 'by'];
-      const queryWords = userInput.toLowerCase()
+      let queryWords = userInput.toLowerCase()
         .split(/\s+/)
         .filter(word => word.length > 2 && !stopWords.includes(word));
       
-      console.log('Query keywords:', queryWords);
+      // Expand query terms with related keywords
+      const expansions = {
+        'banks': ['banking', 'financial', 'finance', 'credit', 'loan'],
+        'bank': ['banking', 'financial', 'finance', 'credit', 'loan'],
+        'banking': ['banks', 'bank', 'financial', 'finance'],
+        'healthcare': ['health', 'medical', 'medicine', 'hospital', 'clinical'],
+        'health': ['healthcare', 'medical', 'medicine', 'hospital'],
+        'manufacturing': ['production', 'factory', 'industrial', 'assembly'],
+        'insurance': ['coverage', 'policy', 'claims', 'underwriting'],
+        'retail': ['commerce', 'shopping', 'store', 'sales'],
+        'logistics': ['supply', 'chain', 'shipping', 'distribution'],
+        'construction': ['building', 'contractor', 'architecture'],
+        'education': ['school', 'university', 'learning', 'academic'],
+        'government': ['public', 'municipal', 'federal', 'state'],
+        'energy': ['power', 'utility', 'electricity', 'oil', 'gas'],
+        'telecommunications': ['telecom', 'network', 'communications']
+      };
+      
+      // Add related terms
+      queryWords.forEach(word => {
+        if (expansions[word]) {
+          queryWords = [...queryWords, ...expansions[word]];
+        }
+      });
+      
+      // Remove duplicates
+      queryWords = [...new Set(queryWords)];
+      
+      console.log('Expanded query keywords:', queryWords);
       
       if (queryWords.length > 0) {
         // Score docs by relevance
@@ -102,14 +130,11 @@ app.use(express.json());
         : '';
 
       const systemPrompt =
-        'You are a conversational AI assistant for Digital Labor Factory. You can ONLY answer using the exact information in the Context below - do not add details, examples, or specifics not explicitly mentioned. ' +
-        'You work for Digital Labor Factory. Never mention being created by Anthropic. ' +
-        'For broad questions, give ONE sentence overview from the Context, then ask what specific aspect they want to know about. ' +
-        'If information is not in the Context, say "I don\'t have that information" and suggest contacting [digitallaborfactory.ai/contact](https://www.digitallaborfactory.ai/contact). ' +
-        'Never list specific companies, systems, or details unless they are explicitly mentioned in the Context. ' +
-        nameLine +
-        'Keep responses to 1-2 sentences maximum. Always end broad questions with a follow-up question. ' +
-        'Use "we" and "our" when referring to Digital Labor Factory.';
+        'You are Digital Labor Factory\'s AI assistant. You MUST ONLY use information from the CONTEXT section below. ' +
+        'CRITICAL: If information is not explicitly stated in the CONTEXT, respond with "I don\'t have that specific information in our knowledge base. Please contact us at digitallaborfactory.ai/contact for details." ' +
+        'Never mention Anthropic. You work for Digital Labor Factory. ' +
+        'Keep responses to 1-2 sentences maximum. For broad topics, give a brief overview from CONTEXT then ask what specific aspect they want to know about. ' +
+        nameLine;
 
       const claudeStream = await fetch('https://api.anthropic.com/v1/messages', {
         method: 'POST',
@@ -119,7 +144,7 @@ app.use(express.json());
           'content-type': 'application/json',
         },
         body: JSON.stringify({
-          model: 'claude-3-sonnet-20240229',
+          model: 'claude-3-5-sonnet-20241022', // Newer model, better instruction following
           max_tokens: 150, // Even shorter to force brevity
           temperature: 0.3, // Lower temp for faster, more focused responses
           stream: true,
