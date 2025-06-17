@@ -31,28 +31,64 @@ app.use(express.json());
       console.log('Industry filter:', industry);
       console.log('User input:', userInput);
 
-      // Optimize filtering and limit context size
-      const filtered = embeddedDocs.filter(doc => {
-        if (!industry) return true; // No industry filter = show all
-        return doc.tags?.some(tag => tag.toLowerCase().includes(industry.toLowerCase()));
-      });
-
-      console.log('Filtered docs:', filtered.length);
-      console.log('Sample tags from first few docs:', filtered.slice(0, 3).map(d => d.tags));
-
-      // For banking queries, also check if we should search content directly
-      const bankingQuery = userInput.toLowerCase().includes('bank');
-      if (bankingQuery && filtered.length === 0) {
-        // Fallback: search content for banking-related terms
-        const bankingDocs = embeddedDocs.filter(doc => 
-          doc.content?.toLowerCase().includes('bank') || 
-          doc.tags?.some(tag => tag.toLowerCase().includes('bank'))
+      // Smart filtering based on query content
+      let filtered = embeddedDocs;
+      
+      if (industry) {
+        filtered = filtered.filter(doc =>
+          doc.tags?.some(tag => tag.toLowerCase().includes(industry.toLowerCase()))
         );
-        console.log('Banking fallback found:', bankingDocs.length, 'docs');
-        filtered.push(...bankingDocs);
       }
 
-      // Limit context to top 5 most relevant docs to speed things up
+      // Extract meaningful words from user query (remove common words)
+      const stopWords = ['tell', 'me', 'about', 'what', 'is', 'are', 'the', 'a', 'an', 'and', 'or', 'but', 'in', 'on', 'at', 'to', 'for', 'of', 'with', 'by'];
+      const queryWords = userInput.toLowerCase()
+        .split(/\s+/)
+        .filter(word => word.length > 2 && !stopWords.includes(word));
+      
+      console.log('Query keywords:', queryWords);
+      
+      if (queryWords.length > 0) {
+        // Score docs by relevance
+        const scoredDocs = filtered.map(doc => {
+          let score = 0;
+          
+          // Check tags for exact matches (higher weight)
+          doc.tags?.forEach(tag => {
+            queryWords.forEach(word => {
+              if (tag.toLowerCase().includes(word)) {
+                score += 10;
+              }
+            });
+          });
+          
+          // Check content for matches (lower weight)
+          const content = doc.content?.toLowerCase() || '';
+          queryWords.forEach(word => {
+            const matches = (content.match(new RegExp(word, 'g')) || []).length;
+            score += matches * 2;
+          });
+          
+          return { doc, score };
+        });
+        
+        // Sort by relevance score and filter out zero scores
+        const relevantDocs = scoredDocs
+          .filter(item => item.score > 0)
+          .sort((a, b) => b.score - a.score)
+          .map(item => item.doc);
+        
+        console.log('Relevant docs found:', relevantDocs.length);
+        console.log('Top scores:', scoredDocs.slice(0, 3).map(item => ({ score: item.score, tags: item.doc.tags })));
+        
+        if (relevantDocs.length > 0) {
+          filtered = relevantDocs;
+        }
+      }
+
+      console.log('Final filtered docs:', filtered.length);
+
+      // Limit context to top 5 most relevant docs
       const topChunks = filtered
         .slice(0, 5)
         .map(doc => doc.content)
