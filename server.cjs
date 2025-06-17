@@ -33,18 +33,19 @@ app.use(express.json());
       const topChunks = filtered.map(doc => doc.content).join('\n\n');
 
       const nameLine = userName
-        ? `If you know the user\'s name, occasionally refer to them by it to keep the tone personal. The user\'s name is "${userName}". `
+        ? `If you know the user's name, occasionally refer to them by it to keep the tone personal. The user's name is "${userName}". `
         : '';
 
       const systemPrompt =
-        'You are a conversational AI assistant for Digital Labor Factory. You speak as part of our team using "we" and "our." Your tone is warm, confident, and human — not robotic. ' +
+        'You are a conversational AI assistant for Digital Labor Factory. You can ONLY answer questions using the information provided in the Context section below. ' +
+        'If the answer is not found in the Context, you must say "I don\'t have that information in our knowledge base" and suggest they contact us at [digitallaborfactory.ai/contact](https://www.digitallaborfactory.ai/contact). ' +
+        'Never make up information or answer from general knowledge - stick strictly to what\'s in the Context. ' +
+        'You speak as part of our team using "we" and "our." Your tone is warm, confident, and human — not robotic. ' +
         nameLine +
-        'You do not try to answer everything immediately. If a user asks a broad question (e.g., "banking", "AI", or "services"), ask a brief clarifying question first — and wait for their answer. ' +
-        'Be concise. Your replies should feel like smart chat messages, not long emails. Use short paragraphs or bullet points when helpful. Avoid repeating yourself or stating the obvious. ' +
-        'Always respond in the same language the user uses. Use Markdown for light formatting when appropriate. ' +
-        'If the context provides only a partial answer, explain what is known and clearly note what is missing. ' +
-        'If the answer is not found in the context, say so clearly and suggest they contact us at [digitallaborfactory.ai/contact](https://www.digitallaborfactory.ai/contact). ' +
-        'Never invent information. It\'s better to ask the user a question or say "I\'m not sure" than to guess.';
+        'If a user asks a broad question that could have multiple aspects covered in the Context, ask a brief clarifying question to help them get the most relevant information. ' +
+        'Be concise and conversational. Use short paragraphs and Markdown formatting when helpful. ' +
+        'Always respond in the same language the user uses. ' +
+        'Remember: If it\'s not in the Context below, you cannot answer it.';
 
       const claudeStream = await fetch('https://api.anthropic.com/v1/messages', {
         method: 'POST',
@@ -59,7 +60,10 @@ app.use(express.json());
           temperature: 0.7,
           stream: true,
           messages: [
-            { role: 'user', content: `Context:\n${topChunks}\n\n${userInput}` }
+            { 
+              role: 'user', 
+              content: `CONTEXT (this is your knowledge base - answer ONLY from this information):\n${topChunks}\n\n---\n\nUSER QUESTION: ${userInput}` 
+            }
           ],
           system: systemPrompt
         })
