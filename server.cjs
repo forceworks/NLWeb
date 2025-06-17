@@ -14,13 +14,6 @@ app.use(express.json());
   const FEEDBACK_LOG_PATH = path.join(__dirname, 'feedback-log.jsonl');
   const embeddedDocs = JSON.parse(await fs.readFile('./embedded_content.json', 'utf8'));
 
-  function cosineSimilarity(a, b) {
-    const dot = a.reduce((sum, val, i) => sum + val * b[i], 0);
-    const normA = Math.sqrt(a.reduce((sum, val) => sum + val * val, 0));
-    const normB = Math.sqrt(b.reduce((sum, val) => sum + val * val, 0));
-    return dot / (normA * normB);
-  }
-
   app.post('/api/query', async (req, res) => {
     const { messages, industry, userName } = req.body;
     const userInput = messages?.slice(-1)[0]?.content;
@@ -33,38 +26,11 @@ app.use(express.json());
     res.setHeader('Transfer-Encoding', 'chunked');
 
     try {
-      const embeddedQuery = await fetch('https://api.openai.com/v1/embeddings', {
-        method: 'POST',
-        headers: {
-          'Authorization': 'Bearer your-embedding-key-here',
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({
-          model: 'text-embedding-3-small',
-          input: userInput
-        })
-      });
+      const filtered = embeddedDocs.filter(doc =>
+        !industry || doc.tags?.map(t => t.toLowerCase()).includes(industry.toLowerCase())
+      );
 
-      const embeddingResult = await embeddedQuery.json();
-      const queryVector = embeddingResult.data[0].embedding;
-
-      const scored = embeddedDocs
-        .filter(doc => !industry || doc.tags?.map(t => t.toLowerCase()).includes(industry.toLowerCase()))
-        .map(doc => ({
-          ...doc,
-          score: cosineSimilarity(doc.vector, queryVector),
-        }));
-
-      let topRelevant = scored
-        .filter(doc => doc.score > 0.4)
-        .sort((a, b) => b.score - a.score)
-        .slice(0, 4);
-
-      if (topRelevant.length === 0) {
-        topRelevant = scored.sort((a, b) => b.score - a.score).slice(0, 2);
-      }
-
-      const topChunks = topRelevant.map(doc => doc.content).join('\n\n');
+      const topChunks = filtered.map(doc => doc.content).join('\n\n');
 
       const nameLine = userName
         ? `If you know the user's name, occasionally refer to them by it to keep the tone personal. The user's name is "${userName}". `
