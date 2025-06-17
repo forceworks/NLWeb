@@ -26,10 +26,31 @@ app.use(express.json());
     res.setHeader('Transfer-Encoding', 'chunked');
 
     try {
+      // Debug: Check what we're working with
+      console.log('Total embedded docs:', embeddedDocs.length);
+      console.log('Industry filter:', industry);
+      console.log('User input:', userInput);
+
       // Optimize filtering and limit context size
-      const filtered = embeddedDocs.filter(doc =>
-        !industry || doc.tags?.some(tag => tag.toLowerCase().includes(industry.toLowerCase()))
-      );
+      const filtered = embeddedDocs.filter(doc => {
+        if (!industry) return true; // No industry filter = show all
+        return doc.tags?.some(tag => tag.toLowerCase().includes(industry.toLowerCase()));
+      });
+
+      console.log('Filtered docs:', filtered.length);
+      console.log('Sample tags from first few docs:', filtered.slice(0, 3).map(d => d.tags));
+
+      // For banking queries, also check if we should search content directly
+      const bankingQuery = userInput.toLowerCase().includes('bank');
+      if (bankingQuery && filtered.length === 0) {
+        // Fallback: search content for banking-related terms
+        const bankingDocs = embeddedDocs.filter(doc => 
+          doc.content?.toLowerCase().includes('bank') || 
+          doc.tags?.some(tag => tag.toLowerCase().includes('bank'))
+        );
+        console.log('Banking fallback found:', bankingDocs.length, 'docs');
+        filtered.push(...bankingDocs);
+      }
 
       // Limit context to top 5 most relevant docs to speed things up
       const topChunks = filtered
@@ -38,22 +59,21 @@ app.use(express.json());
         .join('\n\n')
         .slice(0, 8000); // Cap context at ~8k chars
 
+      console.log('Final context length:', topChunks.length);
+
       const nameLine = userName
         ? `The user's name is "${userName}" - use it occasionally. `
         : '';
 
       const systemPrompt =
-        'You are a conversational AI assistant for Digital Labor Factory. You can ONLY answer questions using the information provided in the Context section below. ' +
-        'You work for Digital Labor Factory - do not mention being created by Anthropic or any other company. You are part of the Digital Labor Factory team. ' +
-        'If the answer is not found in the Context, you must say "I don\'t have that information in our knowledge base" and suggest they contact us at [digitallaborfactory.ai/contact](https://www.digitallaborfactory.ai/contact). ' +
-        'Never make up information or answer from general knowledge - stick strictly to what\'s in the Context. ' +
-        'You speak as part of our team using "we" and "our." Your tone is warm, confident, and human — not robotic. ' +
+        'You are a conversational AI assistant for Digital Labor Factory. You can ONLY answer using the exact information in the Context below - do not add details, examples, or specifics not explicitly mentioned. ' +
+        'You work for Digital Labor Factory. Never mention being created by Anthropic. ' +
+        'For broad questions, give ONE sentence overview from the Context, then ask what specific aspect they want to know about. ' +
+        'If information is not in the Context, say "I don\'t have that information" and suggest contacting [digitallaborfactory.ai/contact](https://www.digitallaborfactory.ai/contact). ' +
+        'Never list specific companies, systems, or details unless they are explicitly mentioned in the Context. ' +
         nameLine +
-        'IMPORTANT: Keep responses SHORT and conversational - 2-3 sentences max unless they ask for details. For broad questions like "tell me about banking services", give a brief overview and ask what specific aspect they want to know more about. ' +
-        'If a user asks a broad question, give a quick summary (1-2 sentences) then ask a clarifying question to help them get more targeted information. ' +
-        'Be concise and conversational. Use short paragraphs and Markdown formatting when helpful. ' +
-        'Always respond in the same language the user uses. ' +
-        'Remember: If it\'s not in the Context below, you cannot answer it. Keep it short and ask follow-up questions.';
+        'Keep responses to 1-2 sentences maximum. Always end broad questions with a follow-up question. ' +
+        'Use "we" and "our" when referring to Digital Labor Factory.';
 
       const claudeStream = await fetch('https://api.anthropic.com/v1/messages', {
         method: 'POST',
@@ -64,7 +84,7 @@ app.use(express.json());
         },
         body: JSON.stringify({
           model: 'claude-3-sonnet-20240229',
-          max_tokens: 300, // Reduced from 1000 to force shorter responses
+          max_tokens: 150, // Even shorter to force brevity
           temperature: 0.3, // Lower temp for faster, more focused responses
           stream: true,
           messages: [
