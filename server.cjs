@@ -10,7 +10,6 @@ const port = process.env.PORT || 3000;
 app.use(cors());
 app.use(express.json());
 
-const __dirname = path.resolve();
 const FEEDBACK_LOG_PATH = path.join(__dirname, 'feedback-log.jsonl');
 
 // Load embedded vectors
