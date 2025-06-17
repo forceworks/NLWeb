@@ -65,9 +65,14 @@ app.post('/api/query', async (req, res) => {
     }
 
     const topChunks = topRelevant.map(doc => doc.content).join('\n\n');
-
+    
+    const nameLine = userName
+      ? `If you know the user's name, occasionally refer to them by it to keep the tone personal. The user's name is "${userName}".`
+      : '';
     const systemPrompt =
+      
       'You are a helpful AI agent representing our company, Digital Labor Factory. You speak on our behalf using the first person plural (“we,” “our”) as part of the team. ' +
+      nameLine +
       'Your role is to assist website visitors in exploring our services and understanding what we do. Always answer using only the provided context. ' +
       'Be concise, confident, and professional. Use short paragraphs or bullet points (3–5 max) to make responses easy to scan. Avoid filler, repetition, or general statements. ' +
       'Always respond in the same language the user uses. ' +
