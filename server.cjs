@@ -44,7 +44,7 @@ app.use(express.json());
         'Always respond in the same language the user uses. Use Markdown for light formatting when appropriate. ' +
         'If the context provides only a partial answer, explain what is known and clearly note what is missing. ' +
         'If the answer is not found in the context, say so clearly and suggest they contact us at [digitallaborfactory.ai/contact](https://www.digitallaborfactory.ai/contact). ' +
-        'Never invent information. It’s better to ask the user a question or say “I’m not sure” than to guess.';
+        'Never invent information. It\'s better to ask the user a question or say "I\'m not sure" than to guess.';
 
       const claudeStream = await fetch('https://api.anthropic.com/v1/messages', {
         method: 'POST',
@@ -65,7 +65,18 @@ app.use(express.json());
         })
       });
 
-      if (!claudeStream.body) throw new Error('No response stream');
+      // Check if the response is ok first
+      if (!claudeStream.ok) {
+        const errorText = await claudeStream.text();
+        console.error('Claude API error:', claudeStream.status, claudeStream.statusText, errorText);
+        throw new Error(`Claude API returned ${claudeStream.status}: ${claudeStream.statusText}`);
+      }
+
+      // Check if we have a valid stream body
+      if (!claudeStream.body || typeof claudeStream.body.getReader !== 'function') {
+        console.error('Invalid stream response:', claudeStream.status, claudeStream.statusText);
+        throw new Error('Invalid stream response from Claude API');
+      }
 
       const reader = claudeStream.body.getReader();
       const decoder = new TextDecoder();
@@ -80,8 +91,14 @@ app.use(express.json());
       res.end();
     } catch (err) {
       console.error('Query processing error:', err);
-      res.write('Error processing request.');
-      res.end();
+      
+      // Make sure we haven't already started writing to the response
+      if (!res.headersSent) {
+        res.status(500).json({ error: 'Error processing request', details: err.message });
+      } else {
+        res.write('\n\nError: Request processing failed.');
+        res.end();
+      }
     }
   });
 
