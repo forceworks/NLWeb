@@ -1,18 +1,16 @@
-""import express from 'express';
-import cors from 'cors';
-import fs from 'fs/promises';
-import path from 'path';
-import { fileURLToPath } from 'url';
-import { appendFile } from 'fs/promises';
-import fetch from 'node-fetch';
+const express = require('express');
+const cors = require('cors');
+const fs = require('fs').promises;
+const path = require('path');
+const { appendFile } = require('fs').promises;
+const fetch = require('node-fetch');
 
 const app = express();
 const port = process.env.PORT || 3000;
 app.use(cors());
 app.use(express.json());
 
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
+const __dirname = path.resolve();
 const FEEDBACK_LOG_PATH = path.join(__dirname, 'feedback-log.jsonl');
 
 // Load embedded vectors
@@ -39,11 +37,10 @@ app.post('/api/query', async (req, res) => {
   res.setHeader('Transfer-Encoding', 'chunked');
 
   try {
-    // Replace OpenAI embedding with placeholder or external service if desired
     const embeddedQuery = await fetch('https://api.openai.com/v1/embeddings', {
       method: 'POST',
       headers: {
-        'Authorization': 'Bearer your-embedding-key-here', // remove or replace with real embedding logic
+        'Authorization': 'Bearer your-embedding-key-here',
         'Content-Type': 'application/json'
       },
       body: JSON.stringify({
