@@ -26,26 +26,34 @@ app.use(express.json());
     res.setHeader('Transfer-Encoding', 'chunked');
 
     try {
+      // Optimize filtering and limit context size
       const filtered = embeddedDocs.filter(doc =>
-        !industry || doc.tags?.map(t => t.toLowerCase()).includes(industry.toLowerCase())
+        !industry || doc.tags?.some(tag => tag.toLowerCase().includes(industry.toLowerCase()))
       );
 
-      const topChunks = filtered.map(doc => doc.content).join('\n\n');
+      // Limit context to top 5 most relevant docs to speed things up
+      const topChunks = filtered
+        .slice(0, 5)
+        .map(doc => doc.content)
+        .join('\n\n')
+        .slice(0, 8000); // Cap context at ~8k chars
 
       const nameLine = userName
-        ? `If you know the user's name, occasionally refer to them by it to keep the tone personal. The user's name is "${userName}". `
+        ? `The user's name is "${userName}" - use it occasionally. `
         : '';
 
       const systemPrompt =
         'You are a conversational AI assistant for Digital Labor Factory. You can ONLY answer questions using the information provided in the Context section below. ' +
+        'You work for Digital Labor Factory - do not mention being created by Anthropic or any other company. You are part of the Digital Labor Factory team. ' +
         'If the answer is not found in the Context, you must say "I don\'t have that information in our knowledge base" and suggest they contact us at [digitallaborfactory.ai/contact](https://www.digitallaborfactory.ai/contact). ' +
         'Never make up information or answer from general knowledge - stick strictly to what\'s in the Context. ' +
         'You speak as part of our team using "we" and "our." Your tone is warm, confident, and human — not robotic. ' +
         nameLine +
-        'If a user asks a broad question that could have multiple aspects covered in the Context, ask a brief clarifying question to help them get the most relevant information. ' +
+        'IMPORTANT: Keep responses SHORT and conversational - 2-3 sentences max unless they ask for details. For broad questions like "tell me about banking services", give a brief overview and ask what specific aspect they want to know more about. ' +
+        'If a user asks a broad question, give a quick summary (1-2 sentences) then ask a clarifying question to help them get more targeted information. ' +
         'Be concise and conversational. Use short paragraphs and Markdown formatting when helpful. ' +
         'Always respond in the same language the user uses. ' +
-        'Remember: If it\'s not in the Context below, you cannot answer it.';
+        'Remember: If it\'s not in the Context below, you cannot answer it. Keep it short and ask follow-up questions.';
 
       const claudeStream = await fetch('https://api.anthropic.com/v1/messages', {
         method: 'POST',
@@ -56,13 +64,13 @@ app.use(express.json());
         },
         body: JSON.stringify({
           model: 'claude-3-sonnet-20240229',
-          max_tokens: 1000,
-          temperature: 0.7,
+          max_tokens: 300, // Reduced from 1000 to force shorter responses
+          temperature: 0.3, // Lower temp for faster, more focused responses
           stream: true,
           messages: [
             { 
               role: 'user', 
-              content: `CONTEXT (this is your knowledge base - answer ONLY from this information):\n${topChunks}\n\n---\n\nUSER QUESTION: ${userInput}` 
+              content: `CONTEXT:\n${topChunks}\n\n---\n\nQUESTION: ${userInput}` 
             }
           ],
           system: systemPrompt
