@@ -41,16 +41,14 @@ app.post('/api/query', async (req, res) => {
     }));
 
     let topRelevant = scored
-  .filter((doc) => doc.score > 0.5)
-  .sort((a, b) => b.score - a.score)
-  .slice(0, 4);
+      .filter((doc) => doc.score > 0.5)
+      .sort((a, b) => b.score - a.score)
+      .slice(0, 4);
 
-// If nothing passed threshold, just use top 2 no matter what
-if (topRelevant.length === 0) {
-  topRelevant = scored
-    .sort((a, b) => b.score - a.score)
-    .slice(0, 2);
-}
+    // Fallback if nothing meets threshold
+    if (topRelevant.length === 0) {
+      topRelevant = scored.sort((a, b) => b.score - a.score).slice(0, 2);
+    }
 
     const topChunks = topRelevant.map((doc) => doc.content).join('\n\n');
 
@@ -60,7 +58,7 @@ if (topRelevant.length === 0) {
         content:
           'You are a helpful AI agent representing our company, Digital Labor Factory. You speak on our behalf using the first person plural (“we,” “our”) as part of the team. ' +
           'Your role is to assist website visitors in exploring our services and understanding what we do. Always answer using only the provided context. Be concise, confident, and professional. Avoid filler, repetition, or general statements.  ' +
-          'Always respond in the same language the user uses.' +
+          'Always respond in the same language the user uses. ' +
           'If the answer is not found in the context, say so clearly and suggest they contact us at [digitallaborfactory.ai/contact](https://www.digitallaborfactory.ai/contact). If the answer is present, do not mention the contact link.',
       },
       {
@@ -88,6 +86,52 @@ if (topRelevant.length === 0) {
   }
 });
 
+// ✅ Feedback route
+app.post('/api/feedback', (req, res) => {
+  const { message, vote } = req.body;
+
+  if (!message || !['up', 'down'].includes(vote)) {
+    return res.status(400).send('Invalid feedback');
+  }
+
+  console.log(`Feedback: ${vote.toUpperCase()} for message: "${message.slice(0, 100)}"`);
+  res.sendStatus(200);
+});
+
 app.listen(port, () => {
   console.log(`NLWeb server running on port ${port}`);
 });
+
+import path from 'path';
+import { fileURLToPath } from 'url';
+import { appendFile } from 'fs/promises';
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+
+const FEEDBACK_LOG_PATH = path.join(__dirname, 'feedback-log.jsonl');
+
+app.post('/api/feedback', async (req, res) => {
+  const { query, response, vote } = req.body;
+
+  if (!query || !response || !['up', 'down'].includes(vote)) {
+    return res.status(400).send('Invalid feedback format');
+  }
+
+  const entry = {
+    timestamp: new Date().toISOString(),
+    vote,
+    query,
+    response
+  };
+
+  try {
+    await appendFile(FEEDBACK_LOG_PATH, JSON.stringify(entry) + '\n', 'utf8');
+    console.log(`Feedback saved: ${vote.toUpperCase()} for query: "${query.slice(0, 80)}..."`);
+    res.sendStatus(200);
+  } catch (err) {
+    console.error('Failed to save feedback:', err);
+    res.sendStatus(500);
+  }
+});
+
