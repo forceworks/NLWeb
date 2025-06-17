@@ -44,7 +44,7 @@ app.use(express.json());
         'Always respond in the same language the user uses. Use Markdown for light formatting when appropriate. ' +
         'If the context provides only a partial answer, explain what is known and clearly note what is missing. ' +
         'If the answer is not found in the context, say so clearly and suggest they contact us at [digitallaborfactory.ai/contact](https://www.digitallaborfactory.ai/contact). ' +
-        'Never invent information. It\'s better to ask the user a question or say "I\'m not sure" than to guess.';
+        'Never invent information. It's better to ask the user a question or say "I\'m not sure" than to guess.';
 
       const claudeStream = await fetch('https://api.anthropic.com/v1/messages', {
         method: 'POST',
@@ -72,23 +72,48 @@ app.use(express.json());
         throw new Error(`Claude API returned ${claudeStream.status}: ${claudeStream.statusText}`);
       }
 
-      // Check if we have a valid stream body
-      if (!claudeStream.body || typeof claudeStream.body.getReader !== 'function') {
-        console.error('Invalid stream response:', claudeStream.status, claudeStream.statusText);
-        throw new Error('Invalid stream response from Claude API');
+      // Handle Claude streaming response for Node.js
+      if (!claudeStream.body) {
+        console.error('No response body from Claude API');
+        throw new Error('No response body from Claude API');
       }
 
-      const reader = claudeStream.body.getReader();
-      const decoder = new TextDecoder();
+      // Process Server-Sent Events from Claude
+      let buffer = '';
+      
+      claudeStream.body.on('data', (chunk) => {
+        buffer += chunk.toString();
+        const lines = buffer.split('\n');
+        buffer = lines.pop() || ''; // Keep incomplete line in buffer
+        
+        for (const line of lines) {
+          if (line.startsWith('data: ')) {
+            const data = line.slice(6);
+            if (data === '[DONE]') {
+              res.end();
+              return;
+            }
+            
+            try {
+              const parsed = JSON.parse(data);
+              if (parsed.delta && parsed.delta.text) {
+                res.write(parsed.delta.text);
+              }
+            } catch (e) {
+              // Skip invalid JSON lines
+            }
+          }
+        }
+      });
 
-      while (true) {
-        const { value, done } = await reader.read();
-        if (done) break;
-        const chunk = decoder.decode(value);
-        res.write(chunk);
-      }
+      claudeStream.body.on('end', () => {
+        res.end();
+      });
 
-      res.end();
+      claudeStream.body.on('error', (err) => {
+        console.error('Stream error:', err);
+        throw err;
+      });
     } catch (err) {
       console.error('Query processing error:', err);
       
