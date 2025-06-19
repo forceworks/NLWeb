@@ -28,8 +28,7 @@ app.use(express.json());
       return res.status(400).send('Invalid request: missing messages');
     }
 
-    res.setHeader('Content-Type', 'text/plain; charset=utf-8');
-    res.setHeader('Transfer-Encoding', 'chunked');
+    res.setHeader('Content-Type', 'application/json');
 
     try {
       const embeddedQuery = await fetch('https://api.openai.com/v1/embeddings', {
@@ -77,7 +76,8 @@ app.use(express.json());
         'Always respond in the same language the user uses. Use Markdown for light formatting when appropriate. ' +
         'If the context provides only a partial answer, explain what is known and clearly note what is missing. ' +
         'If the answer is not found in the context, say so clearly and suggest they contact us at [digitallaborfactory.ai/contact](https://www.digitallaborfactory.ai/contact). ' +
-        'Never invent information. It’s better to ask the user a question or say “I’m not sure” than to guess.';
+        'Never invent information. It’s better to ask the user a question or say “I’m not sure” than to guess. ' +
+        'At the end of your reply, always include up to 3 short, clickable follow-up suggestions related to the question in the format: "SUGGESTED: [Option 1] | [Option 2] | [Option 3]"';
 
       const completion = await fetch('https://api.openai.com/v1/chat/completions', {
         method: 'POST',
@@ -96,12 +96,16 @@ app.use(express.json());
       });
 
       const result = await completion.json();
-      res.send(result.choices?.[0]?.message?.content || '');
+      const fullReply = result.choices?.[0]?.message?.content || '';
+
+      const [replyText, suggestionLine] = fullReply.split(/\nSUGGESTED:/);
+      const suggestions = suggestionLine ? suggestionLine.match(/\[(.*?)\]/g)?.map(s => s.replace(/\[|\]/g, '')) || [] : [];
+
+      res.send({ reply: replyText?.trim(), suggestions });
 
     } catch (err) {
       console.error('Query processing error:', err);
-      res.write('Error processing request.');
-      res.end();
+      res.status(500).send({ reply: 'Error processing request.', suggestions: [] });
     }
   });
 
@@ -120,7 +124,7 @@ app.use(express.json());
     };
 
     try {
-      await appendFile(FEEDBACK_LOG_PATH, JSON.stringify(entry) + '\n', 'utf8');
+      await fs.appendFile(FEEDBACK_LOG_PATH, JSON.stringify(entry) + '\n', 'utf8');
       console.log(`Feedback saved: ${vote.toUpperCase()} for query: "${query.slice(0, 80)}..."`);
       res.sendStatus(200);
     } catch (err) {
