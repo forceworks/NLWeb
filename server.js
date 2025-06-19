@@ -1,9 +1,8 @@
-const express = require('express');
-const cors = require('cors');
-const fs = require('fs').promises;
-const path = require('path');
-const { appendFile } = require('fs').promises;
-const fetch = require('node-fetch');
+import express from 'express';
+import cors from 'cors';
+import fs from 'fs/promises';
+import path from 'path';
+import fetch from 'node-fetch';
 
 const app = express();
 const port = process.env.PORT || 3000;
@@ -11,7 +10,7 @@ app.use(cors());
 app.use(express.json());
 
 (async () => {
-  const FEEDBACK_LOG_PATH = path.join(__dirname, 'feedback-log.jsonl');
+  const FEEDBACK_LOG_PATH = path.join(process.cwd(), 'feedback-log.jsonl');
   const embeddedDocs = JSON.parse(await fs.readFile('./embedded_content.json', 'utf8'));
 
   function cosineSimilarity(a, b) {
@@ -80,7 +79,7 @@ app.use(express.json());
         'If the answer is not found in the context, say so clearly and suggest they contact us at [digitallaborfactory.ai/contact](https://www.digitallaborfactory.ai/contact). ' +
         'Never invent information. It’s better to ask the user a question or say “I’m not sure” than to guess.';
 
-      const openaiStream = await fetch('https://api.openai.com/v1/chat/completions', {
+      const completion = await fetch('https://api.openai.com/v1/chat/completions', {
         method: 'POST',
         headers: {
           'Authorization': `Bearer ${process.env.OPENAI_API_KEY}`,
@@ -88,7 +87,7 @@ app.use(express.json());
         },
         body: JSON.stringify({
           model: 'gpt-4',
-          stream: true,
+          stream: false,
           messages: [
             { role: 'system', content: systemPrompt },
             { role: 'user', content: `Context:\n${topChunks}\n\n${userInput}` }
@@ -96,19 +95,9 @@ app.use(express.json());
         })
       });
 
-      if (!openaiStream.body) throw new Error('No response stream');
+      const result = await completion.json();
+      res.send(result.choices?.[0]?.message?.content || '');
 
-      const reader = openaiStream.body.getReader();
-      const decoder = new TextDecoder();
-
-      while (true) {
-        const { value, done } = await reader.read();
-        if (done) break;
-        const chunk = decoder.decode(value);
-        res.write(chunk);
-      }
-
-      res.end();
     } catch (err) {
       console.error('Query processing error:', err);
       res.write('Error processing request.');
