@@ -110,48 +110,51 @@ app.use(express.json());
         suggestions = suggestionLine.match(/\[(.*?)\]/g)?.map(s => s.replace(/\[|\]/g, '').trim()) || [];
       }
 
-      // Method 2: Universal fallback - extract any list-like patterns from the text
+      // Method 2: Universal fallback - extract options from question patterns
       if (suggestions.length === 0) {
-        // Find sentences that contain multiple items separated by commas and/or "or"
-        const sentences = fullReply.split(/[.!?]+/).filter(s => s.trim().length > 0);
-        
-        for (const sentence of sentences) {
-          // Look for any sentence with multiple comma-separated items
-          if (sentence.includes(',') && (sentence.includes(' or ') || sentence.includes('?'))) {
-            // Extract the part that contains the list
-            const listMatch = sentence.match(/([^,]+(?:,\s*[^,]+)+(?:\s*,?\s*or\s+[^,]+)?)/i);
-            if (listMatch) {
-              const listText = listMatch[1];
-              
-              // Split and clean the options
-              const options = listText
-                .split(/,\s*(?:or\s+)?|\s+or\s+/i)
-                .map(option => option.trim())
-                .map(option => {
-                  // Remove common prefixes and suffixes
-                  return option
-                    .replace(/^(?:its?\s+|the\s+|on\s+|in\s+|about\s+|like\s+|such\s+as\s+|including\s+|things\s+like\s+)/i, '')
-                    .replace(/\s+(?:operations?|services?|solutions?|systems?|processes?|insurance|banking)$/i, '')
-                    .trim();
-                })
-                .filter(option => {
-                  // Keep only meaningful options
-                  return option.length > 2 && 
-                         option.length < 40 && 
-                         !/^(?:and|or|the|a|an|is|are|you|your|for|to|of|in|on|at|by|with|even)$/i.test(option);
-                })
-                .slice(0, 3) // Max 3 suggestions
-                .map(option => {
-                  // Capitalize properly for button display
-                  return option.split(' ')
-                    .map(word => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase())
-                    .join(' ');
-                });
-              
-              if (options.length >= 2) {
-                suggestions = options;
-                break;
-              }
+        // Look for specific question patterns that indicate options
+        const questionPatterns = [
+          // "like A, B, or C"
+          /(?:like|such as)\s+([^,]+(?:,\s*[^,]+)*)\s*,?\s*or\s+([^.?!]+)/i,
+          // "A, B, or C"
+          /([^,]+(?:,\s*[^,]+)+)\s*,?\s*or\s+([^.?!]+)(?:\?|$)/i,
+          // "between A, B, or C"
+          /(?:between|among)\s+([^,]+(?:,\s*[^,]+)*)\s*,?\s*or\s+([^.?!]+)/i
+        ];
+
+        for (const pattern of questionPatterns) {
+          const match = fullReply.match(pattern);
+          if (match) {
+            // Combine the matched groups and split them
+            const allOptions = (match[1] + ', ' + match[2])
+              .split(/,\s*(?:or\s+)?|\s+or\s+/i)
+              .map(option => option.trim())
+              .map(option => {
+                // Clean up the options
+                return option
+                  .replace(/^(?:a\s+|an\s+|the\s+|specific\s+|like\s+)/i, '')
+                  .replace(/\s+(?:automation|processing|detection|service|services)$/i, '')
+                  .trim();
+              })
+              .filter(option => {
+                // Filter out invalid options
+                return option.length > 2 && 
+                       option.length < 40 && 
+                       !/^(?:and|or|the|a|an|is|are|you|your|for|to|of|in|on|at|by|with|how|ai|can|be|used)$/i.test(option) &&
+                       !option.toLowerCase().includes('steve') &&
+                       !option.toLowerCase().includes('sure');
+              })
+              .slice(0, 3) // Max 3 suggestions
+              .map(option => {
+                // Capitalize properly for button display
+                return option.split(' ')
+                  .map(word => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase())
+                  .join(' ');
+              });
+
+            if (allOptions.length >= 2) {
+              suggestions = allOptions;
+              break;
             }
           }
         }
