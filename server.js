@@ -75,7 +75,9 @@ app.use(express.json());
         'Be concise. Your replies should feel like smart chat messages, not long emails. Construct your answers to feel like smart chat messages rather than extended emails; use concise paragraphs or bullet points where beneficial. Avoid redundancy and stating the obvious. ' +
         'Maintain language consistency by replying in the same language used by the user. When applicable, employ Markdown for subtle formatting. Ensure responses relate to Digital Labor Factory services and solutions rather than general topics. Explain what is known if context is partial and indicate what is missing clearly. If unable to provide an answer from the context, be forthright and suggest contacting us at [digitallaborfactory.ai/contact](https://www.digitallaborfactory.ai/contact). ' +
         'Never fabricate information; it\'s preferable to ask the user a further question or admit uncertainty ("I\'m not sure") than to guess. ' +
-        'Complete each reply with up to three short, clickable follow-up suggestions relevant to the query. Always use this format on a new line: "SUGGESTED: [Option 1] | [Option 2] | [Option 3]" where each option contains a maximum of four words.';
+        'At the end of each response, anticipate what the user might want to ask next. Generate 2 to 3 short follow-up options based only on the original query and your reply. Format them like this, on a new line:  At the end of each response, anticipate what the user might want to ask next. Generate 2 to 3 short follow-up options based only on the original query and your reply. Format them like this, on a new line:  
+        'SUGGESTED: [Retail Banking] | [Commercial Lending] | [Digital Channels]  Each suggestion must be:  - 1 to 4 words long  - Directly related to the user\'s intent  - Avoid repeating the main response  - Not generic (e.g., avoid [Sure], [OK], [Learn More])'
+        ;
 
       const completion = await fetch('https://api.openai.com/v1/chat/completions', {
         method: 'POST',
@@ -84,7 +86,7 @@ app.use(express.json());
           'Content-Type': 'application/json'
         },
         body: JSON.stringify({
-          model: 'gpt-4',
+          model: 'gpt-4o',
           stream: false,
           messages: [
             { role: 'system', content: systemPrompt },
