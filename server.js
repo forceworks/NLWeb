@@ -77,7 +77,7 @@ app.use(express.json());
         'If the context provides only a partial answer, explain what is known and clearly note what is missing. ' +
         'If the answer is not found in the context, say so clearly and suggest they contact us at [digitallaborfactory.ai/contact](https://www.digitallaborfactory.ai/contact). ' +
         'Never invent information. It’s better to ask the user a question or say “I’m not sure” than to guess. ' +
-        'At the end of your reply, always include up to 3 short, clickable follow-up suggestions related to the question in the format: "SUGGESTED: [Option 1] | [Option 2] | [Option 3]"';
+        'At the end of your reply, always include up to 3 short, clickable follow-up suggestions related to the question. Use this EXACT format on a new line: "SUGGESTED: [Option 1] | [Option 2] | [Option 3]" where each option is 2-4 words maximum.';
 
       const completion = await fetch('https://api.openai.com/v1/chat/completions', {
         method: 'POST',
@@ -95,13 +95,55 @@ app.use(express.json());
         })
       });
 
-      const result = await completion.json();
-      const fullReply = result.choices?.[0]?.message?.content || '';
+      // IMPROVED CODE:
+const result = await completion.json();
+const fullReply = result.choices?.[0]?.message?.content || '';
 
-      const [replyText, suggestionLine] = fullReply.split(/\nSUGGESTED:/);
-      const suggestions = suggestionLine ? suggestionLine.match(/\[(.*?)\]/g)?.map(s => s.replace(/\[|\]/g, '')) || [] : [];
+console.log('Full AI reply:', fullReply); // Debug log
 
-      res.send({ reply: replyText?.trim(), suggestions });
+// More flexible parsing - try different formats
+let replyText = fullReply;
+let suggestions = [];
+
+// Try splitting on newline + SUGGESTED: first (original format)
+let parts = fullReply.split(/\nSUGGESTED:/);
+if (parts.length > 1) {
+  replyText = parts[0];
+  const suggestionLine = parts[1];
+  suggestions = suggestionLine.match(/\[(.*?)\]/g)?.map(s => s.replace(/\[|\]/g, '')) || [];
+} else {
+  // Try splitting on just SUGGESTED: (without newline)
+  parts = fullReply.split(/SUGGESTED:/);
+  if (parts.length > 1) {
+    replyText = parts[0];
+    const suggestionLine = parts[1];
+    suggestions = suggestionLine.match(/\[(.*?)\]/g)?.map(s => s.replace(/\[|\]/g, '')) || [];
+  }
+}
+
+// If still no suggestions found, try alternative parsing
+if (suggestions.length === 0) {
+  // Look for patterns like "Would you like to know about A, B, or C?"
+  const questionMatch = fullReply.match(/(?:interested in|would you like|choose between|specify)\s+(.+?)(?:\?|$)/i);
+  if (questionMatch) {
+    const optionsText = questionMatch[1];
+    // Split on common separators and clean up
+    const potentialSuggestions = optionsText
+      .split(/,\s*or\s*|,\s*|\s+or\s+/)
+      .map(s => s.replace(/^(our\s+)?/, '').replace(/\s+(solution|services?)$/, '').trim())
+      .filter(s => s.length > 2 && s.length < 50); // Reasonable length suggestions
+    
+    if (potentialSuggestions.length > 0 && potentialSuggestions.length <= 5) {
+      suggestions = potentialSuggestions;
+    }
+  }
+}
+
+console.log('Parsed reply:', replyText?.trim()); // Debug log
+console.log('Parsed suggestions:', suggestions); // Debug log
+
+res.send({ reply: replyText?.trim(), suggestions });
+
 
     } catch (err) {
       console.error('Query processing error:', err);
