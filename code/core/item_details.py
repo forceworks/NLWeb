@@ -13,7 +13,7 @@ import json
 from typing import List, Dict, Any, Optional, Union
 from prompts.prompts import find_prompt, fill_prompt
 from utils.logging_config_helper import get_configured_logger
-from utils.json_utils import trim_json
+from utils.trim import trim_json
 from retrieval.retriever import get_vector_db_client
 from llm.llm import ask_llm
 
@@ -61,7 +61,6 @@ class ItemDetailsHandler():
     async def _find_matching_items(self, candidate_items: List[Dict[str, Any]], details_requested: str):
         """Find items that match the requested item using parallel LLM calls."""
         logger.info(f"Evaluating {len(candidate_items)} candidate items for '{self.item_name} {details_requested}'")
-        print(f"Evaluating {len(candidate_items)} candidate items for '{self.item_name} {details_requested}'")
 
         # Create tasks for parallel evaluation
         tasks = []
@@ -139,15 +138,13 @@ class ItemDetailsHandler():
             logger.error(f"Error evaluating item match: {e}")
             return {"score": 0, "explanation": f"Error: {str(e)}"}
     
-    
-    
     async def _send_no_items_found_message(self):
         """Send message when no matching items are found."""
         message = {
             "message_type": "item_details",
             "item_name": self.item_name,
             "details": f"Could not find any items matching '{self.item_name}' on {self.handler.site}.",
-            "match_score": 0,
+            "score": 0,
             "url": "",
             "site": self.handler.site
         }
